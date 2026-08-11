@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,13 +91,49 @@ type bearerTransport struct {
 }
 
 func (t bearerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	if request.URL.Scheme != t.origin.Scheme || request.URL.Host != t.origin.Host {
+	if !sameOrigin(request.URL, t.origin) {
 		return nil, errors.New("refusing to send credential to a different origin")
 	}
 	clone := request.Clone(request.Context())
 	clone.Header = request.Header.Clone()
 	clone.Header.Set("Authorization", "Bearer "+t.token)
 	return t.base.RoundTrip(clone)
+}
+
+func sameOrigin(left, right *url.URL) bool {
+	if left == nil || right == nil || left.User != nil || right.User != nil {
+		return false
+	}
+	if !strings.EqualFold(left.Scheme, right.Scheme) ||
+		!strings.EqualFold(left.Hostname(), right.Hostname()) ||
+		left.Hostname() == "" {
+		return false
+	}
+	leftPort, leftOK := effectivePort(left)
+	rightPort, rightOK := effectivePort(right)
+	return leftOK && rightOK && leftPort == rightPort
+}
+
+func effectivePort(value *url.URL) (string, bool) {
+	port := value.Port()
+	if port == "" {
+		if strings.HasSuffix(value.Host, ":") {
+			return "", false
+		}
+		switch strings.ToLower(value.Scheme) {
+		case "http":
+			return "80", true
+		case "https":
+			return "443", true
+		default:
+			return "", false
+		}
+	}
+	number, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || number == 0 {
+		return "", false
+	}
+	return strconv.FormatUint(number, 10), true
 }
 
 func parseOrigin(raw string) (*url.URL, error) {
