@@ -96,6 +96,35 @@ func TestBearerTransportRejectsDifferentEffectivePort(t *testing.T) {
 	}
 }
 
+func TestParseOriginAcceptsLoopbackHTTP(t *testing.T) {
+	for _, raw := range []string{
+		"http://LOCALHOST",
+		"http://127.0.0.2",
+		"http://[0:0:0:0:0:0:0:1]",
+		"http://[::1%25loopback]",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := parseOrigin(raw); err != nil {
+				t.Fatalf("parseOrigin(%q) error = %v", raw, err)
+			}
+		})
+	}
+}
+
+func TestParseOriginRejectsNonLoopbackHTTP(t *testing.T) {
+	for _, raw := range []string{
+		"http://agent.example",
+		"http://192.168.1.10",
+		"http://[2001:db8::1]",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := parseOrigin(raw); err == nil {
+				t.Fatalf("parseOrigin(%q) error = nil, want rejection", raw)
+			}
+		})
+	}
+}
+
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (function roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -144,11 +145,19 @@ func parseOrigin(raw string) (*url.URL, error) {
 	if parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return nil, errors.New("URL must have a host and no user information, query, or fragment")
 	}
-	if parsed.Scheme != "https" {
-		hostname := parsed.Hostname()
-		if parsed.Scheme != "http" || (hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1") {
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "https" {
+		if scheme != "http" || !isLoopbackHost(parsed.Hostname()) {
 			return nil, errors.New("URL must use HTTPS except for a loopback HTTP endpoint")
 		}
 	}
-	return &url.URL{Scheme: parsed.Scheme, Host: parsed.Host}, nil
+	return &url.URL{Scheme: scheme, Host: parsed.Host}, nil
+}
+
+func isLoopbackHost(hostname string) bool {
+	if strings.EqualFold(hostname, "localhost") {
+		return true
+	}
+	address, err := netip.ParseAddr(hostname)
+	return err == nil && address.IsLoopback()
 }
