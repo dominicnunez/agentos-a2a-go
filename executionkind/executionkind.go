@@ -46,7 +46,14 @@ func Set(message *a2a.Message, kind Kind) error {
 	if declarations > 1 {
 		return ErrDuplicateDeclaration
 	}
-	if raw, present := message.Metadata[URI]; present {
+	raw, hasMetadata := message.Metadata[URI]
+	if declarations == 0 && hasMetadata {
+		return ErrMissingDeclaration
+	}
+	if declarations == 1 && !hasMetadata {
+		return ErrMissingMetadata
+	}
+	if hasMetadata {
 		if _, err := decode(raw); err != nil {
 			return err
 		}

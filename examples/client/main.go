@@ -59,11 +59,28 @@ func main() {
 	if err != nil {
 		log.Fatalf("send message: %v", err)
 	}
-	task, ok := result.(*a2a.Task)
-	if !ok {
-		log.Fatalf("unexpected response type %T", result)
+	summary, err := summarizeResult(result)
+	if err != nil {
+		log.Fatal(err)
 	}
-	fmt.Printf("task %s: %s\n", task.ID, task.Status.State)
+	fmt.Println(summary)
+}
+
+func summarizeResult(result a2a.SendMessageResult) (string, error) {
+	switch value := result.(type) {
+	case *a2a.Task:
+		if value == nil {
+			return "", errors.New("received a nil task response")
+		}
+		return fmt.Sprintf("task %s: %s", value.ID, value.Status.State), nil
+	case *a2a.Message:
+		if value == nil {
+			return "", errors.New("received a nil message response")
+		}
+		return fmt.Sprintf("message %s received", value.ID), nil
+	default:
+		return "", fmt.Errorf("unexpected response type %T", result)
+	}
 }
 
 type bearerTransport struct {

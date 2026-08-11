@@ -106,4 +106,44 @@ func TestSetRejectsInvalidInput(t *testing.T) {
 	if err := Set(message, KindAgent); !errors.Is(err, ErrDuplicateDeclaration) {
 		t.Fatalf("Set(duplicate) error = %v", err)
 	}
+	tests := []struct {
+		name    string
+		message *a2a.Message
+		want    error
+	}{
+		{
+			name:    "metadata without declaration",
+			message: &a2a.Message{Metadata: map[string]any{URI: map[string]any{"kind": string(KindAgent)}}},
+			want:    ErrMissingDeclaration,
+		},
+		{
+			name:    "declaration without metadata",
+			message: &a2a.Message{Extensions: []string{URI}},
+			want:    ErrMissingMetadata,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			before := *test.message
+			before.Extensions = append([]string(nil), test.message.Extensions...)
+			before.Metadata = cloneMetadata(test.message.Metadata)
+			if err := Set(test.message, KindHuman); !errors.Is(err, test.want) {
+				t.Fatalf("Set() error = %v, want errors.Is(%v)", err, test.want)
+			}
+			if !reflect.DeepEqual(*test.message, before) {
+				t.Fatalf("Set() mutated invalid message: got %#v, want %#v", *test.message, before)
+			}
+		})
+	}
+}
+
+func cloneMetadata(metadata map[string]any) map[string]any {
+	if metadata == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(metadata))
+	for key, value := range metadata {
+		clone[key] = value
+	}
+	return clone
 }
