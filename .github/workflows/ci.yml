@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.25.0", "1.26.5"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+      - run: go mod download
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Module consistency
+        run: go mod tidy -diff
+      - name: Test
+        run: go test -race ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Vulnerability scan
+        if: matrix.go-version == '1.26.5'
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+      - name: AGPL core dependency boundary
+        run: |
+          if go list -m all | awk '{print $1}' | grep --fixed-strings --line-regexp 'github.com/dominicnunez/agentos'; then
+            echo 'the Apache integration module must not depend on Agent OS'
+            exit 1
+          fi

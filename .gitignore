@@ -1,0 +1,5 @@
+/work/
+go.local.mod
+go.local.sum
+*.test
+*.out
