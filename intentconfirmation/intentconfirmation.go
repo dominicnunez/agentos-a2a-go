@@ -19,6 +19,7 @@ type Confirmation struct {
 
 var (
 	ErrNilMessage           = errors.New("intentconfirmation: message is nil")
+	ErrMissingBinding       = errors.New("intentconfirmation: message is missing a durable task binding")
 	ErrInvalidFingerprint   = errors.New("intentconfirmation: invalid fingerprint")
 	ErrDuplicateDeclaration = errors.New("intentconfirmation: duplicate extension declaration")
 	ErrMissingDeclaration   = errors.New("intentconfirmation: metadata is missing its extension declaration")
@@ -29,6 +30,9 @@ var (
 func Set(message *a2a.Message, confirmation Confirmation) error {
 	if message == nil {
 		return ErrNilMessage
+	}
+	if err := validateBinding(message); err != nil {
+		return err
 	}
 	if err := validateFingerprint(confirmation.Fingerprint); err != nil {
 		return err
@@ -70,9 +74,15 @@ func Get(message *a2a.Message) (Confirmation, bool, error) {
 	raw, hasMetadata := message.Metadata[URI]
 	if declarations == 0 {
 		if hasMetadata {
+			if err := validateBinding(message); err != nil {
+				return Confirmation{}, false, err
+			}
 			return Confirmation{}, false, ErrMissingDeclaration
 		}
 		return Confirmation{}, false, nil
+	}
+	if err := validateBinding(message); err != nil {
+		return Confirmation{}, false, err
 	}
 	if !hasMetadata {
 		return Confirmation{}, false, ErrMissingMetadata
@@ -82,6 +92,18 @@ func Get(message *a2a.Message) (Confirmation, bool, error) {
 		return Confirmation{}, false, err
 	}
 	return confirmation, true, nil
+}
+
+// validateBinding checks that the wire message names the durable task and
+// context it confirms. Callers must still verify those identifiers against
+// durable state and reject replayed message IDs.
+func validateBinding(message *a2a.Message) error {
+	if strings.TrimSpace(message.ID) == "" ||
+		strings.TrimSpace(string(message.TaskID)) == "" ||
+		strings.TrimSpace(message.ContextID) == "" {
+		return fmt.Errorf("%w: messageId, taskId, and contextId must be nonempty", ErrMissingBinding)
+	}
+	return nil
 }
 
 func declarationCount(extensions []string) int {

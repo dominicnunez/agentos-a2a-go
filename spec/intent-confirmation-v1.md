@@ -23,6 +23,11 @@ The message must also carry the durable `taskId`, matching `contextId`, and a
 new `messageId`. Missing declarations or metadata, duplicate declarations,
 unknown fields, other actions, and malformed fingerprints are invalid.
 
+The package validates that `taskId`, `contextId`, and `messageId` are
+nonempty. The receiving server must compare the task and context identifiers
+with its durable task state and reject a previously used message identifier;
+those stateful checks cannot be established by extension metadata alone.
+
 Confirmation means the actor accepts Agent OS's exact interpretation of the
 requested work and permits planning to begin. It grants no approval,
 capability, completion status, policy change, or permission to perform an

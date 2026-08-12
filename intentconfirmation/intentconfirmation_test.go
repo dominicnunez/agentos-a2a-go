@@ -11,7 +11,7 @@ import (
 
 func TestRoundTripAndIdempotentSet(t *testing.T) {
 	fingerprint := strings.Repeat("a", 64)
-	message := a2a.NewMessage(a2a.MessageRoleUser, a2a.NewTextPart("Confirm the reviewed Intent."))
+	message := boundMessage()
 	if err := Set(message, Confirmation{Fingerprint: fingerprint}); err != nil {
 		t.Fatal(err)
 	}
@@ -39,12 +39,12 @@ func TestRejectsMalformedState(t *testing.T) {
 		want    error
 	}{
 		{nil, ErrNilMessage},
-		{&a2a.Message{Metadata: map[string]any{URI: map[string]any{"action": "CONFIRM", "fingerprint": fingerprint}}}, ErrMissingDeclaration},
-		{&a2a.Message{Extensions: []string{URI}}, ErrMissingMetadata},
-		{&a2a.Message{Extensions: []string{URI, URI}, Metadata: map[string]any{URI: map[string]any{"action": "CONFIRM", "fingerprint": fingerprint}}}, ErrDuplicateDeclaration},
-		{&a2a.Message{Extensions: []string{URI}, Metadata: map[string]any{URI: map[string]any{"action": "APPROVE", "fingerprint": fingerprint}}}, ErrMalformedMetadata},
-		{&a2a.Message{Extensions: []string{URI}, Metadata: map[string]any{URI: map[string]any{"action": "CONFIRM", "fingerprint": "short"}}}, ErrInvalidFingerprint},
-		{&a2a.Message{Extensions: []string{URI}, Metadata: map[string]any{URI: map[string]any{"action": "CONFIRM", "fingerprint": fingerprint, "approval": true}}}, ErrMalformedMetadata},
+		{messageWith(nil, confirmationMetadata(fingerprint)), ErrMissingDeclaration},
+		{messageWith([]string{URI}, nil), ErrMissingMetadata},
+		{messageWith([]string{URI, URI}, confirmationMetadata(fingerprint)), ErrDuplicateDeclaration},
+		{messageWith([]string{URI}, map[string]any{URI: map[string]any{"action": "APPROVE", "fingerprint": fingerprint}}), ErrMalformedMetadata},
+		{messageWith([]string{URI}, confirmationMetadata("short")), ErrInvalidFingerprint},
+		{messageWith([]string{URI}, map[string]any{URI: map[string]any{"action": "CONFIRM", "fingerprint": fingerprint, "approval": true}}), ErrMalformedMetadata},
 	}
 	for _, test := range tests {
 		if _, _, err := Get(test.message); !errors.Is(err, test.want) {
@@ -60,7 +60,44 @@ func TestAbsentAndInvalidSet(t *testing.T) {
 	if err := Set(nil, Confirmation{Fingerprint: strings.Repeat("a", 64)}); !errors.Is(err, ErrNilMessage) {
 		t.Fatal(err)
 	}
-	if err := Set(&a2a.Message{}, Confirmation{Fingerprint: strings.Repeat("A", 64)}); !errors.Is(err, ErrInvalidFingerprint) {
+	if err := Set(boundMessage(), Confirmation{Fingerprint: strings.Repeat("A", 64)}); !errors.Is(err, ErrInvalidFingerprint) {
 		t.Fatal(err)
 	}
+}
+
+func TestRequiresDurableTaskBinding(t *testing.T) {
+	fingerprint := strings.Repeat("c", 64)
+	for _, message := range []*a2a.Message{
+		{TaskID: "task-1", ContextID: "context-1"},
+		{ID: "message-1", ContextID: "context-1"},
+		{ID: "message-1", TaskID: "task-1"},
+		{ID: " ", TaskID: "task-1", ContextID: "context-1"},
+	} {
+		if err := Set(message, Confirmation{Fingerprint: fingerprint}); !errors.Is(err, ErrMissingBinding) {
+			t.Fatalf("Set(%#v) error=%v want=%v", message, err, ErrMissingBinding)
+		}
+		message.Extensions = []string{URI}
+		message.Metadata = confirmationMetadata(fingerprint)
+		if _, present, err := Get(message); present || !errors.Is(err, ErrMissingBinding) {
+			t.Fatalf("Get(%#v) present=%v error=%v want=%v", message, present, err, ErrMissingBinding)
+		}
+	}
+}
+
+func boundMessage() *a2a.Message {
+	message := a2a.NewMessage(a2a.MessageRoleUser, a2a.NewTextPart("Confirm the reviewed Intent."))
+	message.TaskID = "task-1"
+	message.ContextID = "context-1"
+	return message
+}
+
+func messageWith(extensions []string, metadata map[string]any) *a2a.Message {
+	message := boundMessage()
+	message.Extensions = extensions
+	message.Metadata = metadata
+	return message
+}
+
+func confirmationMetadata(fingerprint string) map[string]any {
+	return map[string]any{URI: map[string]any{"action": "CONFIRM", "fingerprint": fingerprint}}
 }
