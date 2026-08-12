@@ -16,7 +16,12 @@ if err := executionkind.Set(message, executionkind.KindDeterministic); err != ni
 }
 ```
 
-See [the extension specification](spec/execution-kind-v1.md) and the
+The `intentconfirmation` package binds an authenticated actor's confirmation
+to the exact fingerprint of a reviewed Agent OS Intent. It admits that Intent
+to planning but grants no effect authority or approval.
+
+See the [execution-kind](spec/execution-kind-v1.md) and
+[Intent-confirmation](spec/intent-confirmation-v1.md) specifications plus the
 [reference client](examples/client/main.go). The client reads its endpoint and
 bearer credential only from `AGENTOS_A2A_URL` and `AGENTOS_A2A_TOKEN`, never
 prints the credential, rejects redirects, and confines authorization to the
